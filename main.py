@@ -8,7 +8,7 @@ from urllib.parse import urlparse, parse_qs
 
 # Add your Vinted search URLs here
 SEARCHES = {
-    "Nike Shoes under 50€": "https://www.vinted.fr/catalog?search_text=nike&price_to=50&currency=EUR",
+    "Ledmaskers onder 90 EUR": "https://www.vinted.be/catalog?search_text=led%20mask&brand_ids[]=3272194&brand_ids[]=165906&brand_ids[]=9591971&page=1&time=1772988124&search_by_image_uuid=&currency=EUR&order=price_low_to_high&price_to=90&search_id=31925953769",
 }
 
 HISTORY_FILE = 'vinted_history.json'
