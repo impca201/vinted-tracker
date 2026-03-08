@@ -3,11 +3,11 @@ import json
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from pyVinted import Vinted
+from vinted_scraper import VintedScraper
 
 # Add your Vinted search URLs here
 SEARCHES = {
-    "Ledmaskers onder 75 EUR": "https://www.vinted.be/catalog?search_text=led%20mask&brand_ids[]=3272194&brand_ids[]=165906&brand_ids[]=9591971&page=1&time=1772988124&search_by_image_uuid=&currency=EUR&order=price_low_to_high&price_to=75",
+    "Nike Shoes under 50€": "https://www.vinted.fr/catalog?search_text=nike&price_to=50&currency=EUR",
 }
 
 HISTORY_FILE = 'vinted_history.json'
@@ -31,7 +31,7 @@ def send_email(new_items):
         if not items: continue
         html += f"<h3>{search_name}</h3><ul>"
         for item in items:
-            html += f"<li><a href='{item.url}'><strong>{item.title}</strong></a> - {item.price} {item.currency}</li>"
+            html += f"<li><a href='{item['url']}'><strong>{item['title']}</strong></a> - {item['price']}</li>"
         html += "</ul>"
 
     msg.attach(MIMEText(html, "html"))
@@ -47,9 +47,9 @@ def send_email(new_items):
         print(f"Error sending email: {e}")
 
 def main():
-    vinted = Vinted()
+    scraper = VintedScraper("https://www.vinted.fr")
     
-    # Load past seen items just like your camper tracker
+    # Load past seen items
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, 'r') as f:
             history = set(json.load(f))
@@ -62,14 +62,16 @@ def main():
     for search_name, url in SEARCHES.items():
         print(f"Checking {search_name}...")
         try:
-            items = vinted.items.search(url, 20, 1) # Fetches top 20 items
+            # Extract query params from URL
+            items = scraper.search(url, limit=20)
             new_items_found[search_name] = []
             
             for item in items:
-                item_id = str(item.id)
+                item_id = str(item['id'])
                 if item_id not in history:
                     new_items_found[search_name].append(item)
                     updated_history.add(item_id)
+                    print(f"  New item: {item['title']} - {item['price']}")
         except Exception as e:
             print(f"Error fetching {search_name}: {e}")
 
@@ -81,7 +83,7 @@ def main():
 
     # Save state back to GitHub
     with open(HISTORY_FILE, 'w') as f:
-        json.dump(list(updated_history), f, indent=2)
+        json.dump(sorted(list(updated_history)), f, indent=2)
 
 if __name__ == "__main__":
     main()

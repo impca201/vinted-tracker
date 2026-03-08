@@ -1,1 +1,1 @@
-pyVinted
+vinted-scraper>=3.0.0
