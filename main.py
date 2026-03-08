@@ -4,10 +4,11 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from vinted_scraper import VintedScraper
+from urllib.parse import urlparse, parse_qs
 
 # Add your Vinted search URLs here
 SEARCHES = {
-    "Ledmaskers onder 75 EUR": "https://www.vinted.be/catalog?search_text=led%20mask&brand_ids[]=3272194&brand_ids[]=165906&brand_ids[]=9591971&page=1&time=1772988124&search_by_image_uuid=&currency=EUR&order=price_low_to_high&price_to=75",
+    "Nike Shoes under 50€": "https://www.vinted.fr/catalog?search_text=nike&price_to=50&currency=EUR",
 }
 
 HISTORY_FILE = 'vinted_history.json'
@@ -31,7 +32,7 @@ def send_email(new_items):
         if not items: continue
         html += f"<h3>{search_name}</h3><ul>"
         for item in items:
-            html += f"<li><a href='{item['url']}'><strong>{item['title']}</strong></a> - {item['price']}</li>"
+            html += f"<li><a href='{item.url}'><strong>{item.title}</strong></a> - {item.price} {item.currency}</li>"
         html += "</ul>"
 
     msg.attach(MIMEText(html, "html"))
@@ -46,9 +47,24 @@ def send_email(new_items):
     except Exception as e:
         print(f"Error sending email: {e}")
 
-def main():
-    scraper = VintedScraper("https://www.vinted.fr")
+def parse_vinted_url(url):
+    """Extract search parameters from Vinted URL"""
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query)
     
+    # Convert lists to single values and handle brand_ids as array
+    search_params = {}
+    for key, value in params.items():
+        if key == 'brand_ids[]':
+            search_params['brand_ids'] = value  # Keep as list
+        elif len(value) == 1:
+            search_params[key] = value[0]
+        else:
+            search_params[key] = value
+    
+    return search_params
+
+def main():
     # Load past seen items
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, 'r') as f:
@@ -62,18 +78,29 @@ def main():
     for search_name, url in SEARCHES.items():
         print(f"Checking {search_name}...")
         try:
-            # Extract query params from URL
-            items = scraper.search(url, limit=20)
+            # Extract domain and params
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            search_params = parse_vinted_url(url)
+            
+            # Initialize scraper with the correct domain
+            scraper = VintedScraper(base_url)
+            
+            # Search with parameters - returns up to 96 items by default
+            items = scraper.search(search_params)
             new_items_found[search_name] = []
             
-            for item in items:
-                item_id = str(item['id'])
+            # Only check first 20 items to match original behavior
+            for item in list(items)[:20]:
+                item_id = str(item.id)
                 if item_id not in history:
                     new_items_found[search_name].append(item)
                     updated_history.add(item_id)
-                    print(f"  New item: {item['title']} - {item['price']}")
+                    print(f"  New item: {item.title} - {item.price} {item.currency}")
         except Exception as e:
             print(f"Error fetching {search_name}: {e}")
+            import traceback
+            traceback.print_exc()
 
     # Trigger email if anything new was found
     if any(len(items) > 0 for items in new_items_found.values()):
