@@ -22,20 +22,40 @@ def send_email(new_items):
         print("Email credentials missing. Skipping email.")
         return
 
+    total_items = sum(len(items) for items in new_items.values())
+    subject = f"🛍️ {total_items} new {'item' if total_items == 1 else 'items'} available on Vinted!"
+
+    # Build email body matching camper tracker style
+    blocks = []
+    for search_name, items in new_items.items():
+        if not items:
+            continue
+        
+        lines = []
+        for item in items:
+            lines.append(
+                f"<strong>🛍️ {item.title}</strong><br>"
+                f"💶 {item.price} {item.currency}<br>"
+                f"🔗 <a href='{item.url}' style='color: #007BFF; text-decoration: none;'>View item</a>"
+            )
+        
+        blocks.append(
+            f"<h3 style='margin: 16px 0 8px;'>{search_name}</h3>"
+            f"<p>{'<br><br>'.join(lines)}</p>"
+        )
+    
+    body = (
+        "<p>Hi!</p>"
+        "<p>New items matching your searches have just become available:</p>"
+        f"{''.join(blocks)}"
+        "<p>👉 <a href='https://www.vinted.com' style='color: #007BFF; font-weight: bold; text-decoration: none;'>Browse Vinted now!</a></p>"
+    )
+
     msg = MIMEMultipart("alternative")
-    msg['Subject'] = f"🛍️ {sum(len(items) for items in new_items.values())} New Vinted Items Found!"
+    msg['Subject'] = subject
     msg['From'] = sender
     msg['To'] = receiver
-
-    html = "<h2>New Vinted Items Found!</h2>"
-    for search_name, items in new_items.items():
-        if not items: continue
-        html += f"<h3>{search_name}</h3><ul>"
-        for item in items:
-            html += f"<li><a href='{item.url}'><strong>{item.title}</strong></a> - {item.price} {item.currency}</li>"
-        html += "</ul>"
-
-    msg.attach(MIMEText(html, "html"))
+    msg.attach(MIMEText(body, "html"))
 
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
@@ -65,6 +85,8 @@ def parse_vinted_url(url):
     return search_params
 
 def main():
+    print('Vinted tracker started...')
+    
     # Load past seen items
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, 'r') as f:
@@ -76,7 +98,7 @@ def main():
     updated_history = set(history)
 
     for search_name, url in SEARCHES.items():
-        print(f"Checking {search_name}...")
+        print(f"🔎 Checking: {search_name}")
         try:
             # Extract domain and params
             parsed = urlparse(url)
@@ -96,19 +118,17 @@ def main():
                 if item_id not in history:
                     new_items_found[search_name].append(item)
                     updated_history.add(item_id)
-                    print(f"  New item: {item.title} - {item.price} {item.currency}")
+                    print(f"  ✅ New item found: {item.title}")
         except Exception as e:
-            print(f"Error fetching {search_name}: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"[Error] Failed to fetch {search_name}: {e}")
 
     # Trigger email if anything new was found
     if any(len(items) > 0 for items in new_items_found.values()):
         send_email(new_items_found)
     else:
-        print("No new items found.")
+        print('No new items found. No email sent.')
 
-    # Save state back to GitHub
+    # Save state back to GitHub (sorted to reduce git diff noise)
     with open(HISTORY_FILE, 'w') as f:
         json.dump(sorted(list(updated_history)), f, indent=2)
 
