@@ -4,11 +4,42 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from vinted_scraper import VintedScraper
-from urllib.parse import urlparse, parse_qs
 
-# Add your Vinted search URLs here
+# Add your Vinted searches here
+# Each search has a base_url (the Vinted domain) and params (search criteria)
 SEARCHES = {
-    "Ledmaskers onder 90 EUR": "https://www.vinted.be/catalog?search_text=led%20mask&brand_ids[]=3272194&brand_ids[]=165906&brand_ids[]=9591971&page=1&time=1772988124&search_by_image_uuid=&currency=EUR&order=price_low_to_high&price_to=90&search_id=31925953769",
+    "Ledmaskers onder 90 EUR": {
+        "base_url": "https://www.vinted.be",
+        "params": {
+            "search_text": "led mask",
+            "brand_ids": ["3272194", "165906", "9591971"],
+            "price_to": "90",
+            "currency": "EUR",
+            "order": "price_low_to_high",
+        },
+    },
+    "Salomon X Ultra 360 GTX onder 90 EUR": {
+        "base_url": "https://www.vinted.be",
+        "params": {
+            "search_text": "Salomon X Ultra 360 GTX",
+            "size_ids": ["784"],
+            "status_ids": ["1", "6"],  # 1=new, 6=very good condition
+            "price_to": "90",
+            "currency": "EUR",
+            "order": "newest_first",
+        },
+    },
+    "Salomon X Ultra 4 GTX onder 90 EUR": {
+        "base_url": "https://www.vinted.be",
+        "params": {
+            "search_text": "Salomon X Ultra 4 GTX",
+            "size_ids": ["784"],
+            "status_ids": ["1", "6"],
+            "price_to": "90",
+            "currency": "EUR",
+            "order": "newest_first",
+        },
+    },
 }
 
 HISTORY_FILE = 'vinted_history.json'
@@ -67,23 +98,6 @@ def send_email(new_items):
     except Exception as e:
         print(f"Error sending email: {e}")
 
-def parse_vinted_url(url):
-    """Extract search parameters from Vinted URL"""
-    parsed = urlparse(url)
-    params = parse_qs(parsed.query)
-    
-    # Convert lists to single values and handle brand_ids as array
-    search_params = {}
-    for key, value in params.items():
-        if key == 'brand_ids[]':
-            search_params['brand_ids'] = value  # Keep as list
-        elif len(value) == 1:
-            search_params[key] = value[0]
-        else:
-            search_params[key] = value
-    
-    return search_params
-
 def main():
     print('Vinted tracker started...')
     
@@ -97,19 +111,14 @@ def main():
     new_items_found = {}
     updated_history = set(history)
 
-    for search_name, url in SEARCHES.items():
+    for search_name, cfg in SEARCHES.items():
         print(f"🔎 Checking: {search_name}")
+        base_url = cfg["base_url"]
+        params = dict(cfg["params"])  # shallow copy
+        
         try:
-            # Extract domain and params
-            parsed = urlparse(url)
-            base_url = f"{parsed.scheme}://{parsed.netloc}"
-            search_params = parse_vinted_url(url)
-            
-            # Initialize scraper with the correct domain
             scraper = VintedScraper(base_url)
-            
-            # Search with parameters - returns up to 96 items by default
-            items = scraper.search(search_params)
+            items = scraper.search(params)
             new_items_found[search_name] = []
             
             # Only check first 20 items to match original behavior
@@ -118,7 +127,7 @@ def main():
                 if item_id not in history:
                     new_items_found[search_name].append(item)
                     updated_history.add(item_id)
-                    print(f"  ✅ New item found: {item.title}")
+                    print(f"  ✅ New item found: {item.title} - {item.price} {item.currency}")
         except Exception as e:
             print(f"[Error] Failed to fetch {search_name}: {e}")
 
