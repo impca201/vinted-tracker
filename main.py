@@ -40,6 +40,16 @@ SEARCHES = {
             "order": "newest_first",
         },
     },
+    "Nike schoenen maat 42 onder 100 EUR": {
+        "base_url": "https://www.vinted.be",
+        "params": {
+            "search_text": "nike",
+            "size_ids": ["206"],  # size 42 men's shoes
+            "price_to": "100",
+            "currency": "EUR",
+            "order": "newest_first",
+        },
+    },
 }
 
 HISTORY_FILE = 'vinted_history.json'
