@@ -163,11 +163,13 @@ def get_vinted_items(base_url, params):
     except Exception as e:
         print(f"  [Warning] Could not fetch initial cookie: {e}")
         
-    # 2. Reformat parameters for the API (arrays need [] suffix)
+    # 2. Reformat parameters for the API
+    # IMPORTANT: Vinted API requires array parameters like brand_ids or size_ids 
+    # to be comma-separated strings (e.g. brand_ids=1,2,3) rather than standard URL arrays
     api_params = {}
     for k, v in params.items():
         if isinstance(v, list):
-            api_params[f"{k}[]"] = v
+            api_params[k] = ",".join(str(x) for x in v)
         else:
             api_params[k] = v
             
