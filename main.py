@@ -3,7 +3,9 @@ import json
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from vinted_scraper import VintedScraper
+import requests
+import urllib.parse
+import time
 
 # Add your Vinted searches here
 # Each search has a base_url (the Vinted domain) and params (search criteria)
@@ -104,10 +106,16 @@ def send_email(new_items):
         
         lines = []
         for item in items:
+            title = item.get('title', 'Unknown')
+            price_info = item.get('price', {})
+            price = price_info.get('amount', '?') if isinstance(price_info, dict) else item.get('price', '?')
+            currency = price_info.get('currency_code', 'EUR') if isinstance(price_info, dict) else item.get('currency', 'EUR')
+            url = item.get('url', '')
+            
             lines.append(
-                f"<strong>🛍️ {item.title}</strong><br>"
-                f"💶 {item.price} {item.currency}<br>"
-                f"🔗 <a href='{item.url}' style='color: #007BFF; text-decoration: none;'>View item</a>"
+                f"<strong>🛍️ {title}</strong><br>"
+                f"💶 {price} {currency}<br>"
+                f"🔗 <a href='{url}' style='color: #007BFF; text-decoration: none;'>View item</a>"
             )
         
         blocks.append(
@@ -138,6 +146,40 @@ def send_email(new_items):
     except Exception as e:
         print(f"Error sending email: {e}")
 
+def get_vinted_items(base_url, params):
+    """Fetch items directly from Vinted API with custom User-Agent to bypass 406 errors"""
+    session = requests.Session()
+    # A standard modern browser User-Agent prevents Vinted's Cloudflare from instantly returning 406
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Connection": "keep-alive",
+    })
+    
+    # 1. Fetch initial page to obtain a session cookie
+    try:
+        session.get(base_url, timeout=10)
+    except Exception as e:
+        print(f"  [Warning] Could not fetch initial cookie: {e}")
+        
+    # 2. Reformat parameters for the API (arrays need [] suffix)
+    api_params = {}
+    for k, v in params.items():
+        if isinstance(v, list):
+            api_params[f"{k}[]"] = v
+        else:
+            api_params[k] = v
+            
+    # 3. Call the catalog API
+    url = f"{base_url}/api/v2/catalog/items"
+    res = session.get(url, params=api_params, timeout=10)
+    
+    if res.status_code == 200:
+        return res.json().get('items', [])
+    else:
+        raise Exception(f"API returned {res.status_code}: {res.text[:100]}")
+
 def main():
     print('Vinted tracker started...')
     
@@ -154,20 +196,32 @@ def main():
     for search_name, cfg in SEARCHES.items():
         print(f"🔎 Checking: {search_name}")
         base_url = cfg["base_url"]
-        params = dict(cfg["params"])  # shallow copy
+        params = dict(cfg["params"])
         
         try:
-            scraper = VintedScraper(base_url)
-            items = scraper.search(params)
+            items = get_vinted_items(base_url, params)
             new_items_found[search_name] = []
             
-            # Only check first 20 items to match original behavior
+            # Only check first 20 items
             for item in list(items)[:20]:
-                item_id = str(item.id)
+                item_id = str(item.get('id', ''))
+                if not item_id:
+                    continue
+                    
                 if item_id not in history:
                     new_items_found[search_name].append(item)
                     updated_history.add(item_id)
-                    print(f"  ✅ New item found: {item.title} - {item.price} {item.currency}")
+                    
+                    title = item.get('title', 'Unknown')
+                    price_info = item.get('price', {})
+                    price = price_info.get('amount', '?') if isinstance(price_info, dict) else item.get('price', '?')
+                    currency = price_info.get('currency_code', 'EUR') if isinstance(price_info, dict) else item.get('currency', 'EUR')
+                    
+                    print(f"  ✅ New item found: {title} - {price} {currency}")
+            
+            # Sleep slightly to avoid rate limits
+            time.sleep(1.5)
+            
         except Exception as e:
             print(f"[Error] Failed to fetch {search_name}: {e}")
 
@@ -177,7 +231,7 @@ def main():
     else:
         print('No new items found. No email sent.')
 
-    # Save state back to GitHub (sorted to reduce git diff noise)
+    # Save state back to GitHub
     with open(HISTORY_FILE, 'w') as f:
         json.dump(sorted(list(updated_history)), f, indent=2)
 
