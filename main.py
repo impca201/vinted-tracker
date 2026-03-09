@@ -8,10 +8,50 @@ from vinted_scraper import VintedScraper
 # Add your Vinted searches here
 # Each search has a base_url (the Vinted domain) and params (search criteria)
 SEARCHES = {
-    "Ledmaskers onder 90 EUR": {
+    "Ledmaskers onder 90 EUR (EN)": {
         "base_url": "https://www.vinted.be",
         "params": {
             "search_text": "led mask",
+            "brand_ids": ["3272194", "165906", "9591971"],
+            "price_to": "90",
+            "currency": "EUR",
+            "order": "price_low_to_high",
+        },
+    },
+    "Ledmaskers onder 90 EUR (FR)": {
+        "base_url": "https://www.vinted.be",
+        "params": {
+            "search_text": "masque led",
+            "brand_ids": ["3272194", "165906", "9591971"],
+            "price_to": "90",
+            "currency": "EUR",
+            "order": "price_low_to_high",
+        },
+    },
+    "Ledmaskers onder 90 EUR (NL)": {
+        "base_url": "https://www.vinted.be",
+        "params": {
+            "search_text": "led masker",
+            "brand_ids": ["3272194", "165906", "9591971"],
+            "price_to": "90",
+            "currency": "EUR",
+            "order": "price_low_to_high",
+        },
+    },
+    "Ledmaskers onder 90 EUR (ES)": {
+        "base_url": "https://www.vinted.be",
+        "params": {
+            "search_text": "mascara led",
+            "brand_ids": ["3272194", "165906", "9591971"],
+            "price_to": "90",
+            "currency": "EUR",
+            "order": "price_low_to_high",
+        },
+    },
+    "Ledmaskers onder 90 EUR (IT)": {
+        "base_url": "https://www.vinted.be",
+        "params": {
+            "search_text": "maschera led",
             "brand_ids": ["3272194", "165906", "9591971"],
             "price_to": "90",
             "currency": "EUR",
