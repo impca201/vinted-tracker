@@ -9,51 +9,12 @@ import time
 
 # Add your Vinted searches here
 # Each search has a base_url (the Vinted domain) and params (search criteria)
+# Use 'search_texts' (a list) to check multiple translated keywords under ONE email header
 SEARCHES = {
-    "Ledmaskers onder 90 EUR (EN)": {
+    "Ledmaskers onder 90 EUR": {
         "base_url": "https://www.vinted.be",
         "params": {
-            "search_text": "led mask",
-            "brand_ids": ["3272194", "165906", "9591971"],
-            "price_to": "90",
-            "currency": "EUR",
-            "order": "price_low_to_high",
-        },
-    },
-    "Ledmaskers onder 90 EUR (FR)": {
-        "base_url": "https://www.vinted.be",
-        "params": {
-            "search_text": "masque led",
-            "brand_ids": ["3272194", "165906", "9591971"],
-            "price_to": "90",
-            "currency": "EUR",
-            "order": "price_low_to_high",
-        },
-    },
-    "Ledmaskers onder 90 EUR (NL)": {
-        "base_url": "https://www.vinted.be",
-        "params": {
-            "search_text": "led masker",
-            "brand_ids": ["3272194", "165906", "9591971"],
-            "price_to": "90",
-            "currency": "EUR",
-            "order": "price_low_to_high",
-        },
-    },
-    "Ledmaskers onder 90 EUR (ES)": {
-        "base_url": "https://www.vinted.be",
-        "params": {
-            "search_text": "mascara led",
-            "brand_ids": ["3272194", "165906", "9591971"],
-            "price_to": "90",
-            "currency": "EUR",
-            "order": "price_low_to_high",
-        },
-    },
-    "Ledmaskers onder 90 EUR (IT)": {
-        "base_url": "https://www.vinted.be",
-        "params": {
-            "search_text": "maschera led",
+            "search_texts": ["led mask", "masque led", "led masker", "mascara led", "maschera led"],
             "brand_ids": ["3272194", "165906", "9591971"],
             "price_to": "90",
             "currency": "EUR",
@@ -63,7 +24,7 @@ SEARCHES = {
     "Salomon X Ultra 360 GTX onder 90 EUR": {
         "base_url": "https://www.vinted.be",
         "params": {
-            "search_text": "Salomon X Ultra 360 GTX",
+            "search_texts": ["Salomon X Ultra 360 GTX"],
             "size_ids": ["784"],
             "status_ids": ["1", "6"],  # 1=new, 6=very good condition
             "price_to": "90",
@@ -74,7 +35,7 @@ SEARCHES = {
     "Salomon X Ultra 4 GTX onder 90 EUR": {
         "base_url": "https://www.vinted.be",
         "params": {
-            "search_text": "Salomon X Ultra 4 GTX",
+            "search_texts": ["Salomon X Ultra 4 GTX"],
             "size_ids": ["784"],
             "status_ids": ["1", "6"],
             "price_to": "90",
@@ -198,37 +159,52 @@ def main():
     for search_name, cfg in SEARCHES.items():
         print(f"🔎 Checking: {search_name}")
         base_url = cfg["base_url"]
-        params = dict(cfg["params"])
         
-        try:
-            items = get_vinted_items(base_url, params)
+        # Extract base params and multiple search_texts
+        params_base = dict(cfg["params"])
+        search_texts = params_base.pop("search_texts", [""])
+        
+        if search_name not in new_items_found:
             new_items_found[search_name] = []
+
+        # Run an API call for each translated keyword, but group under the same search name
+        for text in search_texts:
+            params = dict(params_base)
+            if text:
+                params["search_text"] = text
             
-            # Only check first 20 items
-            for item in list(items)[:20]:
-                item_id = str(item.get('id', ''))
-                if not item_id:
-                    continue
-                    
-                if item_id not in history:
-                    new_items_found[search_name].append(item)
-                    updated_history.add(item_id)
-                    
-                    title = item.get('title', 'Unknown')
-                    price_info = item.get('price', {})
-                    price = price_info.get('amount', '?') if isinstance(price_info, dict) else item.get('price', '?')
-                    currency = price_info.get('currency_code', 'EUR') if isinstance(price_info, dict) else item.get('currency', 'EUR')
-                    
-                    print(f"  ✅ New item found: {title} - {price} {currency}")
-            
-            # Sleep slightly to avoid rate limits
-            time.sleep(1.5)
-            
-        except Exception as e:
-            print(f"[Error] Failed to fetch {search_name}: {e}")
+            try:
+                items = get_vinted_items(base_url, params)
+                
+                # Only check first 20 items per keyword
+                for item in list(items)[:20]:
+                    item_id = str(item.get('id', ''))
+                    if not item_id:
+                        continue
+                        
+                    # Compare against updated_history so cross-language duplicates are skipped
+                    if item_id not in updated_history:
+                        new_items_found[search_name].append(item)
+                        updated_history.add(item_id)
+                        
+                        title = item.get('title', 'Unknown')
+                        price_info = item.get('price', {})
+                        price = price_info.get('amount', '?') if isinstance(price_info, dict) else item.get('price', '?')
+                        currency = price_info.get('currency_code', 'EUR') if isinstance(price_info, dict) else item.get('currency', 'EUR')
+                        
+                        print(f"  ✅ New item found: {title} - {price} {currency}")
+                
+                # Sleep slightly to avoid rate limits when making multiple queries
+                time.sleep(1.5)
+                
+            except Exception as e:
+                print(f"[Error] Failed to fetch '{search_name}' for keyword '{text}': {e}")
+
+    # Remove empty groupings
+    new_items_found = {k: v for k, v in new_items_found.items() if len(v) > 0}
 
     # Trigger email if anything new was found
-    if any(len(items) > 0 for items in new_items_found.values()):
+    if new_items_found:
         send_email(new_items_found)
     else:
         print('No new items found. No email sent.')
